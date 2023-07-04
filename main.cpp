@@ -1,79 +1,67 @@
 #include <iostream>
-#include <chrono>
+#include <QApplication>
+#include <QPushButton>
+#include <QLabel>
+#include <QSlider>
+#include <QVBoxLayout>
+#include <QTimer>
+#include <QObject>
+#include <QMainWindow>
 #include <thread>
-extern "C"
-{
-    #include <libavformat/avformat.h>
-}
+#include "ascii_parser.h"
+#include "my_label.h"
+#include "ascii_drawer.h"
+#include "player.h"
 
-int shrink = 15;
-char char_colors[] = " .,:;ox%#@";
+AsciiParser *ap;
 
-int open_input_media_file(AVFormatContext** format_context, const char *file_name) {
-    *format_context = avformat_alloc_context();
-    if (!*format_context) {
-        av_log(NULL, AV_LOG_ERROR, "Couldn't allocate memory for the input");
-        return EXIT_FAILURE;
-    }
-    avformat_open_input(format_context, file_name, NULL, NULL);
-    avformat_find_stream_info(*format_context,  NULL);
-    return EXIT_SUCCESS;
-}
+int main(int argc, char **argv) {
+    ap = new AsciiParser(argv[1]);
+    ap->start();
 
-void print_gray_frame(AVFrame *frame) {
-    int real_height = (frame->height + shrink - 1) / shrink;
-    int real_width = (frame->width + shrink - 1) / shrink;
-    int **gray_frame = new int*[real_height];
-    for (int i = 0; i < real_height; i += 1) {
-        gray_frame[i] = new int[real_width];
-        for (int j = 0; j < real_width; j += 1) {
-            gray_frame[i][j] = 0;
-        }
-    }
-    for (int i = 0; i < frame->height; i += 1) {
-        for (int j = 0; j < frame->width; j += 1) {
-            gray_frame[i / shrink][j / shrink] += *(frame->data[0] + i * frame->width + j);
-        }
-    }
-    int border = 256 / 10;
-    std::system("clear");
-    for (int i = 0; i < real_height; i += 1) {
-        for (int j = 0; j < real_width; j += 1) {
-            printf("%c", char_colors[gray_frame[i][j] / (shrink * shrink * border)]);
-        }
-        printf("\n");
-    }
-    fflush(stdout);
-}
+    QApplication app (argc, argv);
+    QWidget window;
+    window.setMinimumSize(800, 800);
 
-int main(int arg_count, char* args[]) {
-    AVFormatContext *format_context = NULL;
-    open_input_media_file(&format_context, args[1]);
-    for (int i = 0; i < format_context->nb_streams; i += 1) {
-        AVCodecParameters *codec_parameters = format_context->streams[i]->codecpar;
-        if (codec_parameters->codec_type != AVMEDIA_TYPE_VIDEO) {
-            continue;
-        }
-        AVCodec *codec = avcodec_find_decoder(codec_parameters->codec_id);
-        AVCodecContext *codec_context = avcodec_alloc_context3(codec);
-        avcodec_parameters_to_context(codec_context, codec_parameters);
-        avcodec_open2(codec_context, codec, NULL);
+    auto slider = new QSlider(Qt::Horizontal, &window);
+    slider->setMinimum(0);
+    slider->setMaximum(ap->duration);
+    slider->setStyleSheet("QSlider::groove:horizontal {\n"
+                          "    border-radius: 1px;       \n"
+                          "    height: 7px;              \n"
+                          "    margin: -1px 0;           \n"
+                          "}\n"
+                          "QSlider::handle:horizontal {\n"
+                          "    background-color: rgb(255, 123, 172);\n"
+                          "    border: 2px solid rgb(77, 77, 77);\n"
+                          "    height: 14px;     \n"
+                          "    width: 12px;\n"
+                          "    margin: -4px 0;     \n"
+                          "    border-radius: 7px  ;\n"
+                          "    padding: -4px 0px;  \n"
+                          "}\n"
+                          "QSlider::add-page:horizontal {\n"
+                          "    background: rgb(122, 201, 67);\n"
+                          "}\n"
+                          "QSlider::sub-page:horizontal {\n"
+                          "    background: rgb(63, 169, 245);\n"
+                          "}");
+    slider->setMaximumHeight(70);
+    slider->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-        AVPacket* packet = av_packet_alloc();
-        AVFrame* frame = av_frame_alloc();
+    auto layout = new QVBoxLayout(&window);
+    layout->setSpacing(0);
 
-        while (av_read_frame(format_context, packet) >= 0) {
-            if (packet->stream_index != format_context->streams[i]->index)
-                continue;
-            avcodec_send_packet(codec_context, packet);
-            avcodec_receive_frame(codec_context, frame);
-            print_gray_frame(frame);
+    MyLabel label( &window);
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 25));
-        }
+    layout->addWidget(&label);
+    layout->addWidget(slider);
 
-        return EXIT_SUCCESS;
-    }
 
-    av_log(NULL, AV_LOG_ERROR, "Couldn't find video stream in file");
+    Player player(&label, ap, &window);
+
+    window.show();
+
+
+    return app.exec();
 }
