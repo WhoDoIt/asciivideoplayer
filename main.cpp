@@ -58,7 +58,8 @@ int main(int argc, char **argv) {
     layout->addWidget(slider);
 
 
-    Player player(&label, ap, &window);
+    Player player(&label, slider, ap, &window);
+    QObject::connect(slider, &QSlider::valueChanged, &player, &Player::set_frame);
 
     window.show();
 

@@ -10,12 +10,15 @@
 
 class Player : public QObject {
 public:
-    explicit Player(MyLabel* label, AsciiParser *parser, QObject *parent = nullptr);
+    explicit Player(MyLabel* label, QSlider *slider, AsciiParser *parser, QObject *parent = nullptr);
 
     ~Player() override;
+public slots:
+    int set_frame(int i);
 private:
     int current_frame = 0;
 
+    QSlider *slider;
     MyLabel *label;
     AsciiParser *parser;
     QTimer *timer;
